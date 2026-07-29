@@ -1290,6 +1290,14 @@ function renderizarHistorico() {
   if(!historico.length){empty.style.display='block';return;}
   empty.style.display='none';
   // Aplicar ordenação atual
+  function parseDH(str) {
+    if(!str) return 0;
+    if(str.includes('/')) {
+      const p=str.split(' '), d=p[0].split('/'), t=(p[1]||'0:0').split(':');
+      if(d.length===3) return new Date(d[2],d[1]-1,d[0],t[0]||0,t[1]||0).getTime();
+    }
+    return new Date(str).getTime()||0;
+  }
   historico.sort((a,b) => {
     let va, vb;
     if(ordemHistorico.campo==='numero') {
@@ -1298,7 +1306,7 @@ function renderizarHistorico() {
     } else if(ordemHistorico.campo==='total') {
       va=parseFloat(a.total||0); vb=parseFloat(b.total||0);
     } else {
-      va=a.data_geracao||''; vb=b.data_geracao||'';
+      va=parseDH(a.data_geracao||''); vb=parseDH(b.data_geracao||'');
     }
     return ordemHistorico.direcao==='asc'?(va>vb?1:-1):(va<vb?1:-1);
   });
@@ -1354,6 +1362,17 @@ function ordenarHistorico(campo) {
   if(el) el.textContent = ordemHistorico.direcao === 'desc' ? '▼' : '▲';
 
   // Ordenar
+  function parseDateHist(str) {
+    if(!str) return 0;
+    // Formato dd/mm/yyyy HH:MM ou dd/mm/yyyy HH:MM:SS
+    if(str.includes('/')) {
+      const p = str.split(' ');
+      const d = p[0].split('/');
+      const t = p[1] ? p[1].split(':') : ['0','0','0'];
+      if(d.length===3) return new Date(d[2],d[1]-1,d[0],t[0]||0,t[1]||0,t[2]||0).getTime();
+    }
+    return new Date(str).getTime() || 0;
+  }
   historico.sort((a, b) => {
     let va, vb;
     if(campo === 'numero') {
@@ -1363,8 +1382,8 @@ function ordenarHistorico(campo) {
       va = parseFloat(a.total||0);
       vb = parseFloat(b.total||0);
     } else { // data
-      va = a.data_geracao||'';
-      vb = b.data_geracao||'';
+      va = parseDateHist(a.data_geracao||'');
+      vb = parseDateHist(b.data_geracao||'');
     }
     return ordemHistorico.direcao === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
   });
