@@ -2220,6 +2220,20 @@ function renderizarConfiguracoes() {
 }
 
 // — RESPONSÁVEIS —
+async function excluirResponsavel(i) {
+  const r = responsaveis[i];
+  if(!r) return;
+  if(!confirm('Excluir o responsavel "' + r.nome + '"? Esta acao nao pode ser desfeita.')) return;
+  try {
+    if(r.id) await sbFetch('carta_assinaturas?id=eq.' + r.id, 'DELETE');
+  } catch(e) { console.warn('Erro:', e); }
+  responsaveis.splice(i, 1);
+  salvarCacheAssinaturas();
+  popularSelectResponsavel();
+  renderizarResponsaveis();
+  toast(r.nome + ' removido.', 'warn');
+}
+
 async function adicionarNovoResponsavel() {
   const nome    = document.getElementById('new-resp-nome').value.trim();
   const cargo   = document.getElementById('new-resp-cargo').value.trim() || 'Depto. Logística';
@@ -2259,12 +2273,13 @@ function renderizarResponsaveis() {
         <div class="resp-nome">${r.nome}</div>
         <div class="resp-cargo">${r.cargo} · ${r.empresa}</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="resp-badge ${r.assinatura_b64?'tem':'sem'}">${r.assinatura_b64?'✓ Com assinatura':'Sem assinatura'}</span>
-        <button class="btn-sm verde" onclick="iniciarUploadAssin('${r.nome.replace(/'/g,"\'")}')">
+        <button class="btn-sm verde" onclick="iniciarUploadAssin('${r.nome.replace(/'/g,"\\'")}')">
           ${r.assinatura_b64?'🔄 Atualizar':'📷 Adicionar'} assinatura
         </button>
-        ${r.assinatura_b64?`<button class="btn-sm del" onclick="removerAssinatura('${r.nome.replace(/'/g,"\'")}')">🗑</button>`:''}
+        ${r.assinatura_b64?`<button class="btn-sm del" onclick="removerAssinatura('${r.nome.replace(/'/g,"\\'")}')">🗑 Assin.</button>`:''}
+        <button class="btn-sm del" onclick="excluirResponsavel(${i})">✕ Excluir</button>
       </div>
     </div>`).join('');
 }
