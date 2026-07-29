@@ -575,7 +575,7 @@
 <div id="toast"></div>
 
 <!-- MODAL SENHA CONFIGURAÇÕES -->
-<div id="modal-senha-config" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:3000;align-items:center;justify-content:center">
+<div id="modal-senha-config" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;padding:20px">
   <div style="background:white;border-radius:14px;max-width:380px;width:90%;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
     <div style="text-align:center;margin-bottom:20px">
       <div style="width:56px;height:56px;background:var(--verde-claro);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:24px">🔒</div>
@@ -2128,6 +2128,10 @@ const SENHA_CONFIG = 'Apis@2026';
 let _configAutenticado = false;
 let _tabPendente = null;
 let _btnPendente = null;
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') fecharSenhaConfig();
+});
 
 function verificarSenhaConfig() {
   const input = document.getElementById('senha-config-input');
