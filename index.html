@@ -1631,7 +1631,14 @@ function diasEmAberto(dataStr) {
 function renderizarCobrancas() {
   const filtroTransp = document.getElementById('cob-transp')?.value || '';
   const filtroDias   = parseInt(document.getElementById('cob-dias')?.value || '0');
-  let pendentes = historico.filter(h => h.tipo === 'carta' && h.status === 'EM ANÁLISE');
+  // Normalizar transportadoras com agrupamentos
+  let pendentes = historico
+    .filter(h => (h.tipo === 'carta' || h.tipo === 'Carta de Débito') && h.status === 'EM ANÁLISE')
+    .map(h => ({...h, transp: normalizarTransp(h.transp||'')}));
+  // Deduplicar por número (carta tem prioridade sobre laudo)
+  const _mapPend = {};
+  pendentes.forEach(h => { if(!_mapPend[h.numero] || h.tipo==='carta') _mapPend[h.numero] = h; });
+  pendentes = Object.values(_mapPend);
   const selT = document.getElementById('cob-transp');
   if(selT) {
     const at = selT.value;
