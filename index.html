@@ -449,8 +449,23 @@
     <div class="card">
       <div class="card-header"><div class="card-header-icon verde">✍️</div><h2>Responsáveis & Assinaturas</h2></div>
       <div class="card-body">
-        <p style="font-size:12.5px;color:var(--cinza-600);margin-bottom:14px">Clique em "Adicionar assinatura" para fazer upload da imagem de cada responsável.</p>
-        <div id="list-responsaveis"></div>
+        <p style="font-size:12.5px;color:var(--cinza-600);margin-bottom:14px">Cadastre os responsáveis e faça upload da assinatura de cada um.</p>
+        <div id="list-responsaveis" style="margin-bottom:16px"></div>
+        <div style="border-top:1.5px solid var(--cinza-200);padding-top:16px">
+          <p style="font-size:12px;font-weight:700;color:var(--cinza-600);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Adicionar novo responsável</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="new-resp-nome" placeholder="Nome completo"
+              style="flex:2;min-width:160px;height:36px;padding:0 11px;border:1.5px solid var(--cinza-200);border-radius:7px;font-family:inherit;font-size:13px;outline:none"
+              onfocus="this.style.borderColor='var(--verde)'" onblur="this.style.borderColor='var(--cinza-200)'">
+            <input id="new-resp-cargo" placeholder="Cargo (ex: Depto. Logística)"
+              style="flex:2;min-width:160px;height:36px;padding:0 11px;border:1.5px solid var(--cinza-200);border-radius:7px;font-family:inherit;font-size:13px;outline:none"
+              onfocus="this.style.borderColor='var(--verde)'" onblur="this.style.borderColor='var(--cinza-200)'">
+            <input id="new-resp-empresa" placeholder="Empresa (ex: Apis Flora Indl. e Coml. Ltda.)"
+              style="flex:3;min-width:200px;height:36px;padding:0 11px;border:1.5px solid var(--cinza-200);border-radius:7px;font-family:inherit;font-size:13px;outline:none"
+              onfocus="this.style.borderColor='var(--verde)'" onblur="this.style.borderColor='var(--cinza-200)'">
+            <button onclick="adicionarNovoResponsavel()" style="height:36px;padding:0 16px;background:var(--verde);color:white;border:none;border-radius:7px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">+ Adicionar</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2205,6 +2220,32 @@ function renderizarConfiguracoes() {
 }
 
 // — RESPONSÁVEIS —
+async function adicionarNovoResponsavel() {
+  const nome    = document.getElementById('new-resp-nome').value.trim();
+  const cargo   = document.getElementById('new-resp-cargo').value.trim() || 'Depto. Logística';
+  const empresa = document.getElementById('new-resp-empresa').value.trim() || 'Apis Flora Indl. e Coml. Ltda.';
+  if(!nome) { toast('Digite o nome do responsável.', 'warn'); return; }
+  if(responsaveis.find(r => r.nome === nome)) { toast('Responsável já cadastrado.', 'warn'); return; }
+
+  const novoResp = { nome, cargo, empresa, assinatura_b64: null, id: null };
+
+  try {
+    const res = await sbFetch('carta_assinaturas', 'POST', { nome, cargo, empresa, assinatura_b64: null });
+    if(res && res[0]) novoResp.id = res[0].id;
+  } catch(e) { console.warn('Supabase:', e); }
+
+  responsaveis.push(novoResp);
+  salvarCacheAssinaturas();
+
+  document.getElementById('new-resp-nome').value = '';
+  document.getElementById('new-resp-cargo').value = '';
+  document.getElementById('new-resp-empresa').value = '';
+
+  popularSelectResponsavel();
+  renderizarResponsaveis();
+  toast(`${nome} adicionado! Faça upload da assinatura.`, 'success');
+}
+
 function renderizarResponsaveis() {
   const el=document.getElementById('list-responsaveis');
   el.innerHTML=responsaveis.map((r,i)=>`
