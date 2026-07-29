@@ -352,12 +352,15 @@
 
     <!-- EVOLUÇÃO MENSAL -->
     <div class="card">
-      <div class="card-header"><div class="card-header-icon verde">📈</div><h2>Evolução Mensal</h2></div>
-      <div class="card-body" style="padding:0">
-        <table class="hist-table">
-          <thead><tr><th>Mês/Ano</th><th style="text-align:right">Qtd Cartas</th><th style="text-align:right">Valor Total</th><th style="text-align:right">Ticket Médio</th><th>Status predominante</th></tr></thead>
-          <tbody id="cons-mensal-body"></tbody>
-        </table>
+      <div class="card-header">
+        <div class="card-header-icon verde">📈</div>
+        <h2>Evolução Mensal</h2>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button id="chart-tipo-btn" onclick="toggleChartTipo()" style="padding:5px 12px;border:1.5px solid var(--cinza-200);border-radius:7px;background:white;font-family:inherit;font-size:12px;cursor:pointer;color:var(--cinza-700)">Ver por Valor</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:20px">
+        <canvas id="chart-mensal" style="width:100%;max-height:320px"></canvas>
       </div>
     </div>
 
@@ -609,7 +612,7 @@ async function tentarSupabase() {
     const [assinDB, transpDB, histDB] = await Promise.all([
       sbFetch('carta_assinaturas?select=*&order=nome'),
       sbFetch('carta_transportadoras?select=id,nome,email&ativo=eq.true&order=nome'),
-      sbFetch('carta_historico?select=*&order=created_at.desc&limit=200')
+      sbFetch('carta_historico?select=*&order=created_at.desc&limit=500')
     ]);
 
     if(assinDB && assinDB.length) {
@@ -1317,37 +1320,70 @@ function popularFiltroTransportadoraHist() {
 // ── REEMITIR CARTA ──
 function reemitirCarta(i) {
   const h = historico[i];
-  if(!confirm(`Recarregar dados da Carta ${h.numero} no formulário?\n\nOs dados atuais do formulário serão substituídos.`)) return;
-  // Preencher formulário com dados do histórico
-  const hoje = new Date(), pad = n=>String(n).padStart(2,'0');
-  document.getElementById('f-data').value = `${hoje.getFullYear()}-${pad(hoje.getMonth()+1)}-${pad(hoje.getDate())}`;
-  document.getElementById('f-numero').value = h.numero;
-  document.getElementById('f-nfd').value = h.nfd||'';
-  document.getElementById('f-nfo').value = h.nfo||'';
-  document.getElementById('f-cliente').value = h.cliente||'';
-  document.getElementById('f-cod-cliente').value = '';
-  // Transportadora
-  const sel = document.getElementById('f-transportadora');
-  if(sel) { for(let o of sel.options) { if(o.value===h.transp) { o.selected=true; break; } } }
-  // Responsável
-  const selR = document.getElementById('f-responsavel');
-  if(selR) { for(let o of selR.options) { if(o.value===h.responsavel) { o.selected=true; break; } } }
-  atualizarResponsavel();
-  // Observações
-  if(h.obs) document.getElementById('f-obs').value = h.obs||'';
-  // Limpar itens
-  document.getElementById('itens-body').innerHTML='';
-  idLinha=0;
+  const tipo = h.tipo === 'laudo' || h.tipo === 'Laudo de Descarte' ? 'laudo' : 'carta';
+
+  // Montar objeto docAtual com os dados do histórico
   let itensReemitir = [];
   try { itensReemitir = typeof h.itens === 'string' ? JSON.parse(h.itens) : (h.itens||[]); } catch(e) {}
-  if(itensReemitir.length) {
-    itensReemitir.forEach(it => adicionarLinha(it));
-  } else {
+
+  // Se não tem itens salvos, abre no formulário para preencher
+  if(!itensReemitir.length) {
+    if(!confirm(`A carta ${h.numero} não tem itens salvos.\nDeseja abrir no formulário para preencher os dados?`)) return;
+    // Preencher formulário
+    const hoje = new Date(), pad = n=>String(n).padStart(2,'0');
+    document.getElementById('f-data').value = `${hoje.getFullYear()}-${pad(hoje.getMonth()+1)}-${pad(hoje.getDate())}`;
+    document.getElementById('f-numero').value = h.numero;
+    document.getElementById('f-nfd').value = h.nfd||'';
+    document.getElementById('f-nfo').value = h.nfo||'';
+    document.getElementById('f-cliente').value = h.cliente||'';
+    document.getElementById('f-cod-cliente').value = '';
+    const sel = document.getElementById('f-transportadora');
+    if(sel) { for(let o of sel.options) { if(o.value===h.transp) { o.selected=true; break; } } }
+    const selR = document.getElementById('f-responsavel');
+    if(selR) { for(let o of selR.options) { if(o.value===h.responsavel) { o.selected=true; break; } } }
+    atualizarResponsavel();
+    if(h.obs) document.getElementById('f-obs').value = h.obs||'';
+    document.getElementById('itens-body').innerHTML=''; idLinha=0;
     for(let j=0;j<3;j++) adicionarLinha();
+    calcTotal();
+    switchTab('formulario', document.querySelectorAll('.tab')[0]);
+    toast(`Dados da Carta ${h.numero} carregados. Preencha os itens e gere o documento.`,'warn');
+    return;
   }
-  calcTotal();
-  switchTab('formulario', document.querySelectorAll('.tab')[0]);
-  toast(`Dados da Carta ${h.numero} carregados no formulário.`,'success');
+
+  // Tem itens — gerar direto sem passar pelo formulário
+  const resp = responsaveis.find(r => r.nome === h.responsavel) || responsaveis[0];
+  const [dia,mes,ano] = (h.data_geracao||'').split(' ')[0].split('/');
+  const dataFormatada = dia && mes && ano ? `${dia}/${mes}/${ano}` : new Date().toLocaleDateString('pt-BR');
+
+  docAtual = {
+    numero:  h.numero,
+    nfd:     h.nfd||'',
+    nfo:     h.nfo||'',
+    cliente: h.cliente||'',
+    transp:  h.transp||'',
+    responsavel: h.responsavel||'',
+    obs:     h.obs||'',
+    itens:   itensReemitir,
+    total:   parseFloat(h.total||0),
+    dataFormatada: dataFormatada,
+    resp:    resp
+  };
+
+  if(tipo === 'carta') {
+    htmlCartaAtual = htmlCarta(docAtual);
+    document.getElementById('carta-preview').innerHTML = htmlCartaAtual;
+    const nc = document.getElementById('nome-arquivo-carta');
+    if(nc) nc.value = nomeArquivoPDF('carta', docAtual).replace('.pdf','');
+    abrirModal('modal-carta');
+  } else {
+    htmlLaudoAtual = htmlLaudo(docAtual);
+    document.getElementById('laudo-preview').innerHTML = htmlLaudoAtual;
+    const nl = document.getElementById('nome-arquivo-laudo');
+    if(nl) nl.value = nomeArquivoPDF('laudo', docAtual).replace('.pdf','');
+    abrirModal('modal-laudo');
+  }
+  toast(`Carta ${h.numero} pronta para reimprimir!`, 'success');
 }
 
 // ── EXPORTAR HISTÓRICO EXCEL ──
@@ -1496,20 +1532,13 @@ function renderizarConsolidado() {
   });
   const mesesOrdenados = Object.entries(porMes).sort((a,b) => {
     const [ma,aa] = a[0].split('/'); const [mb,ab] = b[0].split('/');
-    return (ab+mb).localeCompare(aa+ma);
+    return (aa+ma).localeCompare(ab+mb); // crescente para o gráfico
   });
-  const tbodyM = document.getElementById('cons-mensal-body');
-  const badges = {'EM ANÁLISE':'badge-analise','PAGO':'badge-pago','RECUSADO':'badge-recusado'};
-  tbodyM.innerHTML = mesesOrdenados.map(([mes, d]) => {
-    const statusDom = Object.entries(d.status).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
-    return `<tr>
-      <td style="font-weight:600">${mes}</td>
-      <td style="text-align:right">${d.qtd}</td>
-      <td style="text-align:right;font-family:monospace">R$ ${formatMoeda(d.valor)}</td>
-      <td style="text-align:right;font-family:monospace">R$ ${formatMoeda(d.valor/d.qtd)}</td>
-      <td><span class="badge ${badges[statusDom]||'badge-analise'}">${statusDom}</span></td>
-    </tr>`;
-  }).join('');
+
+  // Guardar dados para toggle
+  window._chartDadosMensal = mesesOrdenados;
+  window._chartModo = window._chartModo || 'qtd';
+  renderizarGraficoMensal(mesesOrdenados, window._chartModo);
 
   // Popular filtros
   popularFiltroConsolidado();
@@ -1701,6 +1730,108 @@ function selecionarEmail(gi) {
 
 function abrirOutlook(dest, assunto) {
   window.location.href = 'mailto:' + encodeURIComponent(dest) + '?subject=' + encodeURIComponent(assunto);
+}
+
+let _chartInstance = null;
+
+function toggleChartTipo() {
+  window._chartModo = window._chartModo === 'qtd' ? 'valor' : 'qtd';
+  const btn = document.getElementById('chart-tipo-btn');
+  if(btn) btn.textContent = window._chartModo === 'qtd' ? 'Ver por Valor' : 'Ver por Qtd';
+  if(window._chartDadosMensal) renderizarGraficoMensal(window._chartDadosMensal, window._chartModo);
+}
+
+function renderizarGraficoMensal(meses, modo) {
+  const canvas = document.getElementById('chart-mensal');
+  if(!canvas) return;
+
+  const labels = meses.map(([m]) => m);
+  const valores = meses.map(([, d]) => modo === 'qtd' ? d.qtd : parseFloat(d.valor.toFixed(2)));
+  const maxVal = Math.max(...valores, 1);
+
+  // Dimensionar canvas
+  const W = canvas.offsetWidth || 800;
+  const H = 300;
+  canvas.width  = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const padL = 70, padR = 20, padT = 20, padB = 60;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const n = labels.length;
+  if(n === 0) {
+    ctx.fillStyle = '#9aa3ad';
+    ctx.font = '13px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nenhum dado para exibir', W/2, H/2);
+    return;
+  }
+
+  const barW = Math.min(chartW / n * 0.65, 60);
+  const gap   = chartW / n;
+
+  // Grid
+  ctx.strokeStyle = '#e8eaec';
+  ctx.lineWidth = 1;
+  const steps = 5;
+  for(let i = 0; i <= steps; i++) {
+    const y = padT + chartH - (i / steps) * chartH;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    const label = modo === 'valor'
+      ? 'R$ ' + (maxVal * i / steps).toLocaleString('pt-BR', {maximumFractionDigits:0})
+      : String(Math.round(maxVal * i / steps));
+    ctx.fillStyle = '#9aa3ad';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'right';
+    ctx.fillText(label, padL - 6, y + 4);
+  }
+
+  // Barras
+  valores.forEach((v, i) => {
+    const x = padL + i * gap + (gap - barW) / 2;
+    const barH2 = (v / maxVal) * chartH;
+    const y = padT + chartH - barH2;
+
+    // Gradiente verde
+    const grad = ctx.createLinearGradient(x, y, x, padT + chartH);
+    grad.addColorStop(0, '#0b6136');
+    grad.addColorStop(1, '#2ecc71');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, barH2, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Valor no topo
+    ctx.fillStyle = '#0a3922';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    const topLabel = modo === 'valor'
+      ? 'R$' + (v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(0))
+      : String(v);
+    if(barH2 > 16) ctx.fillText(topLabel, x + barW/2, y - 4);
+
+    // Label mês
+    ctx.fillStyle = '#5a6472';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(labels[i], x + barW/2, padT + chartH + 16);
+  });
+
+  // Eixo X
+  ctx.strokeStyle = '#e8eaec';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(padL, padT + chartH);
+  ctx.lineTo(W - padR, padT + chartH);
+  ctx.stroke();
+
+  // Título
+  ctx.fillStyle = '#5a6472';
+  ctx.font = '11px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText(modo === 'qtd' ? 'Quantidade de Cartas por Mês' : 'Valor Total por Mês (R$)', padL, padT - 6);
 }
 
 function switchTab(tab,btn) {
