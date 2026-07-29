@@ -597,6 +597,10 @@
 
 <script>
 var toastTimer;
+const SENHA_CONFIG = 'Apis@2026';
+var _configAutenticado = false;
+var _tabPendente = null;
+var _btnPendente = null;
 // ══════════════════════════════════════════════
 // SUPABASE
 // ══════════════════════════════════════════════
@@ -1318,7 +1322,7 @@ function renderizarHistorico() {
   });
 }
 
-async // ── FILTROS DO HISTÓRICO ──
+// ── FILTROS DO HISTÓRICO ──
 function ordenarHistorico(campo) {
   if(ordemHistorico.campo === campo) {
     ordemHistorico.direcao = ordemHistorico.direcao === 'asc' ? 'desc' : 'asc';
@@ -2124,10 +2128,7 @@ function buscarPorValor() {
 }
 
 // ════════ SENHA CONFIGURAÇÕES ════════
-const SENHA_CONFIG = 'Apis@2026';
-let _configAutenticado = false;
-let _tabPendente = null;
-let _btnPendente = null;
+
 
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape') fecharSenhaConfig();
