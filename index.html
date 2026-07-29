@@ -409,6 +409,9 @@
               oninput="formatarInputValor(this)"
               onkeydown="if(event.key==='Enter') buscarPorValor()">
           </div>
+          <select id="busca-transp" style="height:42px;padding:0 10px;border:1.5px solid var(--cinza-200);border-radius:8px;font-family:inherit;font-size:13px;outline:none;color:var(--cinza-800)">
+            <option value="">Todas as transportadoras</option>
+          </select>
           <div style="display:flex;gap:8px;align-items:center">
             <label style="font-size:12.5px;color:var(--cinza-600)">Tolerância:</label>
             <select id="busca-tolerancia" style="height:42px;padding:0 10px;border:1.5px solid var(--cinza-200);border-radius:8px;font-family:inherit;font-size:13px;outline:none">
@@ -1356,9 +1359,10 @@ function filtrarHistorico() {
   const tipo   = document.getElementById('hist-tipo')?.value||'';
   const resp   = document.getElementById('hist-resp')?.value||'';
   document.querySelectorAll('#historico-body tr').forEach(tr => {
+    const transpNorm = normalizarTransp(tr.dataset.transp||'');
     const ok =
       (!busca  || tr.dataset.busca?.includes(busca)) &&
-      (!transp || tr.dataset.transp === transp) &&
+      (!transp || transpNorm === transp) &&
       (!status || tr.dataset.status === status) &&
       (!tipo   || tr.dataset.tipo === tipo) &&
       (!resp   || tr.dataset.resp === resp);
@@ -1393,7 +1397,8 @@ function popularFiltroTransportadoraHist() {
   if(!sel) return;
   const atual = sel.value;
   sel.innerHTML = '<option value="">Todas as transport.</option>';
-  const nomes = [...new Set(historico.map(h=>h.transp).filter(Boolean))].sort();
+  // Normalizar nomes para mostrar só os principais
+  const nomes = [...new Set(historico.map(h=>normalizarTransp(h.transp||'')).filter(Boolean))].sort();
   nomes.forEach(n => {
     const opt = document.createElement('option');
     opt.value = n; opt.textContent = n.split(' ')[0];
@@ -1998,19 +2003,39 @@ function formatarInputValor(el) {
   el.value = v;
 }
 
-function buscarPorValor() {
-  const inputStr = document.getElementById('busca-valor-input').value.replace(',','.');
-  const alvo = parseFloat(inputStr);
-  if(isNaN(alvo) || alvo <= 0) { toast('Digite um valor válido.','warn'); return; }
-  const tol     = parseFloat(document.getElementById('busca-tolerancia').value);
-  const maxCart = parseInt(document.getElementById('busca-max-cartas').value);
-  const status  = document.getElementById('busca-valor-status');
-  const res     = document.getElementById('busca-valor-resultados');
+function popularTranspBusca() {
+  const sel = document.getElementById('busca-transp');
+  if(!sel) return;
+  const atual = sel.value;
+  // Pegar transportadoras únicas já normalizadas
+  const ts = [...new Set(
+    historico
+      .filter(h => h.tipo==='carta'||h.tipo==='Carta de Débito')
+      .map(h => normalizarTransp(h.transp||''))
+      .filter(Boolean)
+  )].sort();
+  sel.innerHTML = '<option value="">Todas as transportadoras</option>' +
+    ts.map(t => `<option ${t===atual?'selected':''} value="${t}">${t}</option>`).join('');
+}
 
-  // Pegar cartas do histórico (só cartas, não laudos)
-  const cartas = historico.filter(h =>
-    (h.tipo==='carta'||h.tipo==='Carta de Débito') && parseFloat(h.total||0) > 0
-  ).map(h => ({...h, totalNum: parseFloat(h.total||0)}));
+function buscarPorValor() {
+  popularTranspBusca();
+  const inputStr  = document.getElementById('busca-valor-input').value.replace(',','.');
+  const alvo      = parseFloat(inputStr);
+  if(isNaN(alvo) || alvo <= 0) { toast('Digite um valor válido.','warn'); return; }
+  const tol       = parseFloat(document.getElementById('busca-tolerancia').value);
+  const maxCart   = parseInt(document.getElementById('busca-max-cartas').value);
+  const filtroT   = document.getElementById('busca-transp').value;
+  const status    = document.getElementById('busca-valor-status');
+  const res       = document.getElementById('busca-valor-resultados');
+
+  // Pegar cartas normalizando transportadora
+  let cartas = historico
+    .filter(h => (h.tipo==='carta'||h.tipo==='Carta de Débito') && parseFloat(h.total||0) > 0)
+    .map(h => ({...h, transp: normalizarTransp(h.transp||''), totalNum: parseFloat(h.total||0)}));
+
+  // Aplicar filtro de transportadora
+  if(filtroT) cartas = cartas.filter(h => h.transp === filtroT);
 
   status.textContent = `Buscando em ${cartas.length} cartas...`;
   res.innerHTML = '';
@@ -2140,25 +2165,28 @@ function _abrirTabConfiguracoes(tab, btn) {
 }
 
 function switchTab(tab,btn) {
+  // Verificar senha ANTES de mudar de aba
+  if(tab==='configuracoes' && !_configAutenticado) {
+    _tabPendente = tab; _btnPendente = btn;
+    const modal = document.getElementById('modal-senha-config');
+    modal.style.display = 'flex';
+    setTimeout(() => document.getElementById('senha-config-input')?.focus(), 100);
+    return;
+  }
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   if(btn) btn.classList.add('active');
   if(tab==='configuracoes') {
-    if(!_configAutenticado) {
-      // Pedir senha
-      _tabPendente = tab; _btnPendente = btn;
-      const modal = document.getElementById('modal-senha-config');
-      modal.style.display = 'flex';
-      setTimeout(() => document.getElementById('senha-config-input')?.focus(), 100);
-      return; // Não muda de aba ainda
-    }
     renderizarConfiguracoes();
   }
   if(tab==='historico') renderizarHistorico();
   if(tab==='consolidado') renderizarConsolidado();
   if(tab==='cobrancas') renderizarCobrancas();
-  if(tab==='buscavalor') document.getElementById('busca-valor-input')?.focus();
+  if(tab==='buscavalor') {
+    popularTranspBusca();
+    document.getElementById('busca-valor-input')?.focus();
+  }
   // Ao sair das configurações, desautenticar
   if(tab !== 'configuracoes') _configAutenticado = false;
 }
