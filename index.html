@@ -404,6 +404,24 @@
       </div>
     </div>
 
+    <!-- AGRUPAMENTOS -->
+    <div class="card">
+      <div class="card-header"><div class="card-header-icon verde">🔗</div><h2>Agrupamentos de Transportadoras</h2></div>
+      <div class="card-body">
+        <p style="font-size:12.5px;color:var(--cinza-600);margin-bottom:12px">Defina nomes alternativos que serão tratados como a mesma transportadora no Consolidado e Cobranças.</p>
+        <div class="config-list" id="list-agrupamentos" style="margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="new-grupo-principal" placeholder="Nome principal (ex: BRASPRESS TRANSPORTES URGENTES LTDA)"
+            style="flex:2;min-width:200px;height:36px;padding:0 11px;border:1.5px solid var(--cinza-200);border-radius:7px;font-family:inherit;font-size:12px;outline:none"
+            onfocus="this.style.borderColor='var(--verde)'" onblur="this.style.borderColor='var(--cinza-200)'">
+          <input id="new-grupo-alias" placeholder="Nome alternativo (ex: BRASPRESS TRANSPORTES URGENTES)"
+            style="flex:2;min-width:200px;height:36px;padding:0 11px;border:1.5px solid var(--cinza-200);border-radius:7px;font-family:inherit;font-size:12px;outline:none"
+            onfocus="this.style.borderColor='var(--verde)'" onblur="this.style.borderColor='var(--cinza-200)'">
+          <button onclick="adicionarAgrupamento()" style="height:36px;padding:0 16px;background:var(--verde);color:white;border:none;border-radius:7px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">+ Adicionar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- TRANSPORTADORAS -->
     <div class="card">
       <div class="card-header"><div class="card-header-icon verde">🚚</div><h2>Transportadoras</h2></div>
@@ -1450,7 +1468,10 @@ function renderizarConsolidado() {
   const filtroMes    = document.getElementById('cons-mes')?.value || '';
 
   // Filtrar apenas cartas (não laudos) - aceitar ambos os formatos
-  let dados = historico.filter(h => h.tipo === 'carta' || h.tipo === 'Carta de Débito');
+  // Normalizar nomes de transportadoras antes de filtrar
+  const dadosBrutos = historico.filter(h => h.tipo === 'carta' || h.tipo === 'Carta de Débito');
+  const dadosNorm = dadosBrutos.map(h => ({...h, transpNorm: normalizarTransp(h.transp||'')}));
+  let dados = dadosNorm.map(h => ({...h, transp: h.transpNorm}));
 
   if(filtroTransp) dados = dados.filter(h => h.transp === filtroTransp);
   if(filtroStatus) dados = dados.filter(h => h.status === filtroStatus);
@@ -1834,6 +1855,69 @@ function renderizarGraficoMensal(meses, modo) {
   ctx.fillText(modo === 'qtd' ? 'Quantidade de Cartas por Mês' : 'Valor Total por Mês (R$)', padL, padT - 6);
 }
 
+// ════════ AGRUPAMENTOS DE TRANSPORTADORAS ════════
+function carregarAgrupamentos() {
+  return JSON.parse(localStorage.getItem('apis_agrupamentos') || '[]');
+  // Formato: [{principal: 'BRASPRESS LTDA', alias: 'BRASPRESS'}]
+}
+function salvarAgrupamentos(arr) {
+  localStorage.setItem('apis_agrupamentos', JSON.stringify(arr));
+}
+
+function normalizarTransp(nome) {
+  // Resolve o nome real baseado nos agrupamentos
+  const grupos = carregarAgrupamentos();
+  for(const g of grupos) {
+    if(g.alias === nome) return g.principal;
+    if(g.principal === nome) return g.principal;
+  }
+  return nome;
+}
+
+function adicionarAgrupamento() {
+  const principal = document.getElementById('new-grupo-principal').value.trim();
+  const alias     = document.getElementById('new-grupo-alias').value.trim();
+  if(!principal || !alias) { toast('Preencha os dois campos.', 'warn'); return; }
+  if(principal === alias)  { toast('Os nomes devem ser diferentes.', 'warn'); return; }
+  const grupos = carregarAgrupamentos();
+  // Verificar duplicata
+  if(grupos.some(g => g.alias === alias)) {
+    toast('Esse nome alternativo já está cadastrado.', 'warn'); return;
+  }
+  grupos.push({principal, alias});
+  salvarAgrupamentos(grupos);
+  document.getElementById('new-grupo-principal').value = '';
+  document.getElementById('new-grupo-alias').value = '';
+  renderizarAgrupamentos();
+  toast('Agrupamento salvo!', 'success');
+}
+
+function excluirAgrupamento(i) {
+  const grupos = carregarAgrupamentos();
+  grupos.splice(i, 1);
+  salvarAgrupamentos(grupos);
+  renderizarAgrupamentos();
+  toast('Removido.', 'warn');
+}
+
+function renderizarAgrupamentos() {
+  const el = document.getElementById('list-agrupamentos');
+  if(!el) return;
+  const grupos = carregarAgrupamentos();
+  if(!grupos.length) {
+    el.innerHTML = '<div style="padding:10px 0;color:var(--cinza-400);font-size:13px">Nenhum agrupamento cadastrado.</div>';
+    return;
+  }
+  el.innerHTML = grupos.map((g, i) => `
+    <div class="config-item" style="padding:10px 14px">
+      <div style="display:flex;flex-direction:column;gap:2px;flex:1">
+        <span style="font-size:12px;color:var(--cinza-500);font-weight:600">PRINCIPAL: <span style="color:var(--verde-escuro)">${g.principal}</span></span>
+        <span style="font-size:12px;color:var(--cinza-500)">ALIAS: <span style="color:var(--cinza-800)">${g.alias}</span></span>
+      </div>
+      <button class="btn-sm del" onclick="excluirAgrupamento(${i})">🗑 Excluir</button>
+    </div>`).join('');
+}
+
 function switchTab(tab,btn) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
@@ -1848,6 +1932,7 @@ function switchTab(tab,btn) {
 function renderizarConfiguracoes() {
   renderizarResponsaveis();
   renderizarTransportadoras();
+  renderizarAgrupamentos();
   renderizarItensConfig();
   renderizarClientesConfig();
 }
