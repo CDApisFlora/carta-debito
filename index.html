@@ -582,7 +582,7 @@
       </div>
       <button class="btn btn-ghost" onclick="fecharModal('modal-laudo')">Fechar</button>
       <button class="btn btn-secondary" onclick="imprimirDoc('laudo')">🖨️ Imprimir / Salvar PDF</button>
-      <button class="btn btn-primary" onclick="salvarHistorico(docAtual,'laudo').then(()=>toast('Salvo no histórico!','success'))">💾 Salvar no Histórico</button>
+      
     </div>
   </div>
 </div>
@@ -1262,6 +1262,11 @@ async function calcularProximoNumeroSupabase() {
 }
 
 async function salvarHistorico(d,tipo) {
+  // Verificar duplicidade
+  const jaExiste = historico.some(h => h.numero === d.numero);
+  if(jaExiste) {
+    if(!confirm('A carta ' + d.numero + ' ja esta no historico!\n\nDeseja salvar novamente mesmo assim?')) return;
+  }
   const reg={
     data_geracao: new Date().toLocaleString('pt-BR'),
     numero:d.numero, cliente:d.cliente, nfo:d.nfo,
@@ -1680,8 +1685,14 @@ function popularFiltroConsolidado() {
   const selR = document.getElementById('cons-resp');
   if(!selT || !selR) return;
   const atualT = selT.value, atualR = selR.value;
-  const transps = [...new Set(historico.filter(h=>h.tipo==='carta').map(h=>h.transp).filter(Boolean))].sort();
-  const resps   = [...new Set(historico.filter(h=>h.tipo==='carta').map(h=>h.responsavel).filter(Boolean))].sort();
+  // Normalizar transportadoras com agrupamentos
+  const transps = [...new Set(
+    historico
+      .filter(h => h.tipo==='carta' || h.tipo==='Carta de Débito')
+      .map(h => normalizarTransp(h.transp||''))
+      .filter(Boolean)
+  )].sort();
+  const resps = [...new Set(historico.filter(h=>h.tipo==='carta'||h.tipo==='Carta de Débito').map(h=>h.responsavel).filter(Boolean))].sort();
   selT.innerHTML = '<option value="">Todas as transportadoras</option>' + transps.map(t=>`<option ${t===atualT?'selected':''}>${t}</option>`).join('');
   selR.innerHTML = '<option value="">Todos os responsáveis</option>' + resps.map(r=>`<option ${r===atualR?'selected':''}>${r}</option>`).join('');
 }
