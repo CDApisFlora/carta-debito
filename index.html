@@ -1740,12 +1740,16 @@ async function salvarEmailTranspIdx(idx) {
 // ════════ COBRANÇAS ════════
 function diasEmAberto(dataStr) {
   if(!dataStr) return 0;
+  // Limpar vírgula que o toLocaleString('pt-BR') adiciona: "11/08/2026, 10:30"
+  const clean = dataStr.replace(',', '').trim();
   let dt;
-  if(dataStr.includes('/')) {
-    const p = dataStr.split(' ')[0].split('/');
-    if(p.length===3) dt = new Date(p[2], p[1]-1, p[0]);
-  } else { dt = new Date(dataStr); }
-  if(!dt || isNaN(dt)) return 0;
+  if(clean.includes('/')) {
+    const p = clean.split(' ')[0].split('/');
+    if(p.length===3) dt = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+  } else {
+    dt = new Date(clean);
+  }
+  if(!dt || isNaN(dt.getTime())) return 0;
   return Math.floor((new Date() - dt) / 86400000);
 }
 
