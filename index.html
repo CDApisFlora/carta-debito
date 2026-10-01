@@ -581,6 +581,20 @@
 
 <div id="toast"></div>
 
+<!-- MODAL E-MAILS HISTÓRICO -->
+<div class="modal-overlay" id="modal-emails-hist">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header"><h3>✉️ Mensagens de E-mail</h3><button class="modal-close" onclick="fecharModal('modal-emails-hist')">×</button></div>
+    <div class="modal-body" style="padding:20px 22px">
+      <div id="modal-emails-hist-info" style="font-size:12.5px;color:var(--cinza-600);margin-bottom:16px;padding:10px 14px;background:var(--cinza-100);border-radius:8px;border:1px solid var(--cinza-200)"></div>
+      <div id="modal-emails-hist-msgs"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-emails-hist')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL SENHA CONFIGURAÇÕES -->
 <div id="modal-senha-config" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;padding:20px">
   <div style="background:white;border-radius:14px;max-width:380px;width:90%;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
@@ -1336,6 +1350,7 @@ function renderizarHistorico() {
           <option ${h.status==='RECUSADO'?'selected':''}>RECUSADO</option>
         </select>
         <button onclick="reemitirCarta(${i})" title="Reemitir" style="margin-left:3px;background:none;border:none;cursor:pointer;color:var(--verde);font-size:14px;padding:2px 4px;border-radius:4px" onmouseover="this.style.background='var(--verde-claro)'" onmouseout="this.style.background='none'">🔄</button>
+        <button onclick="verEmailsHistorico(${i})" title="Ver e-mails" style="margin-left:2px;background:none;border:none;cursor:pointer;color:#1a6fb5;font-size:14px;padding:2px 4px;border-radius:4px" onmouseover="this.style.background='#e8f0fb'" onmouseout="this.style.background='none'">📧</button>
         <button onclick="excluirHistorico(${i})" title="Excluir" style="margin-left:2px;background:none;border:none;cursor:pointer;color:#c0392b;font-size:14px;padding:2px 4px;border-radius:4px" onmouseover="this.style.background='#fde8e8'" onmouseout="this.style.background='none'">🗑</button>
       </td>`;
     tbody.appendChild(tr);
@@ -1509,6 +1524,49 @@ function reemitirCarta(i) {
     abrirModal('modal-laudo');
   }
   toast(`Carta ${h.numero} pronta para reimprimir!`, 'success');
+}
+
+// ── E-MAILS DO HISTÓRICO ──
+function verEmailsHistorico(i) {
+  const h = historico[i];
+  if(!h) return;
+  const tipo = h.tipo === 'laudo' || h.tipo === 'Laudo de Descarte' ? 'laudo' : 'carta';
+  const docNomeCap = tipo === 'carta' ? 'Carta de Débito' : 'Laudo de Descarte';
+
+  const d = {
+    numero:     h.numero,
+    nfd:        h.nfd||'',
+    nfo:        h.nfo||'',
+    cliente:    h.cliente||'',
+    transp:     h.transp||'',
+    responsavel:h.responsavel||'',
+    total:      parseFloat(h.total||0)
+  };
+
+  const { msgComercial, msgTransportadora } = gerarMensagens(d, tipo);
+  const uid = 'h' + i;
+
+  const infoEl = document.getElementById('modal-emails-hist-info');
+  infoEl.innerHTML = `<strong>${docNomeCap} nº ${d.numero}</strong> &nbsp;·&nbsp; ${d.transp||'—'} &nbsp;·&nbsp; ${d.cliente||'—'} &nbsp;·&nbsp; <span style="font-family:monospace">R$ ${formatMoeda(d.total)}</span>`;
+
+  const msgsEl = document.getElementById('modal-emails-hist-msgs');
+  msgsEl.innerHTML = `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:12px;font-weight:600;color:var(--cinza-600);text-transform:uppercase;letter-spacing:0.5px">📧 E-mail — Comercial / Fiscal</span>
+        <button onclick="copiarTexto('msg-comercial-${uid}')" style="font-size:11.5px;padding:3px 10px;border:1px solid var(--verde);border-radius:5px;background:var(--verde-claro);color:var(--verde);cursor:pointer;font-family:inherit">📋 Copiar</button>
+      </div>
+      <textarea id="msg-comercial-${uid}" readonly style="width:100%;height:130px;padding:10px;border:1.5px solid var(--cinza-200);border-radius:8px;font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical;color:var(--cinza-800);background:var(--cinza-100);box-sizing:border-box">${msgComercial}</textarea>
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:12px;font-weight:600;color:var(--cinza-600);text-transform:uppercase;letter-spacing:0.5px">🚚 E-mail — Transportadora</span>
+        <button onclick="copiarTexto('msg-transp-${uid}')" style="font-size:11.5px;padding:3px 10px;border:1px solid var(--verde);border-radius:5px;background:var(--verde-claro);color:var(--verde);cursor:pointer;font-family:inherit">📋 Copiar</button>
+      </div>
+      <textarea id="msg-transp-${uid}" readonly style="width:100%;height:175px;padding:10px;border:1.5px solid var(--cinza-200);border-radius:8px;font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical;color:var(--cinza-800);background:var(--cinza-100);box-sizing:border-box">${msgTransportadora}</textarea>
+    </div>`;
+
+  abrirModal('modal-emails-hist');
 }
 
 // ── EXPORTAR HISTÓRICO EXCEL ──
